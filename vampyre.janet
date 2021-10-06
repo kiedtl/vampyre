@@ -6,6 +6,8 @@
 (def HEIGHT 100)
 (def WIDTH  100)
 
+(var msg "chilly...")
+
 (def T_WALL  0)
 (def T_FLOOR 1)
 (def tile-proto @{ :type T_WALL
@@ -61,15 +63,24 @@
 (var player -1)
 (var memory @{})
 
+(defn // [arg1 & args]
+  (var accm arg1)
+  (each arg args
+    (/= accm arg))
+  (math/round accm))
+
 (defn draw []
   (fill 0 0 width height " ")
 
   (def player-coord ((mobs player) :coord))
 
-  (def startx (max 0 (- (player-coord :x) (/  width 2))))
-  (def starty (max 0 (- (player-coord :y) (/ height 2))))
-  (def endx (min  WIDTH (+ (player-coord :x) (/  width 2))))
-  (def endy (min HEIGHT (+ (player-coord :y) (/ height 2))))
+  (def mapwidth (- width 1))
+  (def mapheight (- height 2))
+
+  (def startx (max 0 (- (player-coord :x) (//  mapwidth 2))))
+  (def starty (max 0 (- (player-coord :y) (// mapheight 2))))
+  (def endx (min  WIDTH (+ (player-coord :x) (//  mapwidth 2))))
+  (def endy (min HEIGHT (+ (player-coord :y) (// mapheight 2))))
 
   (var y 0)
   (loop [my :range [starty endy]]
@@ -98,7 +109,10 @@
 
       (c7put x y s)
       (++ x))
-    (++ y)))
+    (++ y))
+ 
+  (color 0x0E)
+  (c7put 0 (- height 1) msg))
 
 (defn mapgen []
   (var cur (new-coord (/ WIDTH 2) (/ HEIGHT 2) 0))
