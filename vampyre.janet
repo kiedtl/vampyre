@@ -75,17 +75,26 @@
   (loop [my :range [starty endy]]
     (var x 0)
     (loop [mx :range [startx endx]]
+      (def tile (at-dungeon (new-coord mx my 0)))
+
       (color
         (if (((mobs player) :fov) [my mx])
-          0x0D
+          (match (tile :type)
+            (@ T_WALL)  0x0D
+            (@ T_FLOOR) 0x0E)
           (if (memory [my mx])
             0x0F
             0x00)))
-      (def tile (at-dungeon (new-coord mx my 0)))
 
-      (var s (if (= (tile :type) T_WALL) "#" "."))
+      (var s
+        (match (tile :type)
+          (@ T_WALL)  "#"
+          (@ T_FLOOR) "."))
+
       (if (not= (tile :mob) -1)
-        (set s ((mobs (tile :mob)) :tile)))
+        (do
+          (set s ((mobs (tile :mob)) :tile))
+          (color 0x01)))
 
       (c7put x y s)
       (++ x))
