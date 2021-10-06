@@ -25,6 +25,8 @@
 (var coord-proto @{ :x 0 :y 0 :z 0 })
 (defn new-coord [x y z]
   (table/setproto @{ :x x :y y :z z} coord-proto))
+(defn eq-coord [a b]
+  (and (= (a :x) (b :x)) (= (a :y) (b :y)) (= (a :z) (b :z))))
 (defn add-xy [a b]
   (var r @{ :x (+ (a :x) (b :x)) :y (+ (a :y) (b :y)) })
   (if (or (< (r :x) 0) (< (r :y) 0) (>= (r :x) WIDTH) (>= (r :y) HEIGHT))
@@ -38,6 +40,7 @@
                   :coord (new-coord -1 -1 0)
                   :hp 10
                   :max-hp 10
+                  :fov @{}
                   :move-mob (fn [mob dir]
                               (def src (mob :coord))
                               (def dst (add-xy src dir))
@@ -66,6 +69,7 @@
   (loop [my :range [starty endy]]
     (var x 0)
     (loop [mx :range [startx endx]]
+      (color (if (((mobs player) :fov) [my mx]) 0x0D 0x00))
       (def tile (at-dungeon (new-coord mx my 0)))
 
       (var s (if (= (tile :type) T_WALL) "#" "."))
@@ -92,6 +96,40 @@
     (set cur (or (add-xy cur new-dir) cur))
     (set last-dir new-dir)))
 
+(defn raycast [center radius]
+  (var res @{})
+  (set (res [(center :y) (center :x)]) true)
+
+  (loop [i :range [0 360]]
+    (def ax (math/sin (/ (* i math/pi) 180)))
+    (def ay (math/cos (/ (* i math/pi) 180)))
+
+    (var x (center :x))
+    (var y (center :y))
+
+    (var ray-dead false)
+    (loop [z :range [0 radius] :until ray-dead]
+      (+= x ax)
+      (+= y ay)
+
+      (def ix (math/round x))
+      (def iy (math/round y))
+      (def coord (new-coord ix iy (center :z)))
+
+      (if (and (>= ix 0) (>= iy 0) (< ix WIDTH) (< iy HEIGHT))
+        (do
+          (set (res [iy ix]) true)
+          (if (and
+                (not (:walkable? (at-dungeon coord)))
+                (not (eq-coord coord center)))
+            (set ray-dead true)))
+        (set ray-dead true))))
+  res)
+
+(defn tick []
+  (loop [mob :in mobs]
+    (set (mob :fov) (raycast (mob :coord) 7))))
+
 (defn init []
   (loop [y :range [0 HEIGHT]]
     (put dungeon y (array/new WIDTH))
@@ -106,6 +144,7 @@
                      })
   (array/push mobs (table/setproto player-obj mob-proto))
   (set ((at-dungeon player-coord) :mob) player)
+  (tick)
   (draw))
 
 (defn step [])
@@ -116,4 +155,5 @@
     (or (= k "j") (= k "down"))  (:move-mob (mobs player) D_S)
     (or (= k "k") (= k "up"))    (:move-mob (mobs player) D_N)
     (or (= k "l") (= k "right")) (:move-mob (mobs player) D_E))
+  (tick)
   (draw))
