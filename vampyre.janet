@@ -38,8 +38,9 @@
 (def mob-proto @{ :id -1
                   :tile "g"
                   :coord (new-coord -1 -1 0)
-                  :hp 10
                   :max-hp 10
+                  :hp 10
+                  :fov-radius (- (/ (max height width) 2) 3)
                   :fov @{}
                   :move-mob (fn [mob dir]
                               (def src (mob :coord))
@@ -54,6 +55,7 @@
                 })
 (var mobs @[])
 (var player -1)
+(var memory @{})
 
 (defn draw []
   (fill 0 0 width height " ")
@@ -69,7 +71,12 @@
   (loop [my :range [starty endy]]
     (var x 0)
     (loop [mx :range [startx endx]]
-      (color (if (((mobs player) :fov) [my mx]) 0x0D 0x00))
+      (color
+        (if (((mobs player) :fov) [my mx])
+          0x0D
+          (if (memory [my mx])
+            0x0F
+            0x00)))
       (def tile (at-dungeon (new-coord mx my 0)))
 
       (var s (if (= (tile :type) T_WALL) "#" "."))
@@ -128,7 +135,9 @@
 
 (defn tick []
   (loop [mob :in mobs]
-    (set (mob :fov) (raycast (mob :coord) 7))))
+    (set (mob :fov) (raycast (mob :coord) (mob :fov-radius))))
+  (loop [coord :keys ((mobs player) :fov)]
+    (set (memory coord) true)))
 
 (defn init []
   (loop [y :range [0 HEIGHT]]
