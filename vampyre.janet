@@ -137,8 +137,8 @@
         (do
           (set (res [iy ix]) true)
           (if (and
-                (not (:walkable? (at-dungeon coord)))
-                (not (eq-coord coord center)))
+                (not= ((at-dungeon coord) :type) T_FLOOR)
+                (not  (eq-coord coord center)))
             (set ray-dead true)))
         (set ray-dead true))))
   res)
