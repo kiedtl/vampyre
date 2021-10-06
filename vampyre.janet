@@ -103,13 +103,19 @@
     (set cur (or (add-xy cur new-dir) cur))
     (set last-dir new-dir)))
 
+(def raycast-sin-vals
+  (map (fn [i] (math/sin (/ (* i math/pi) 180))) (range 0 360)))
+
+(def raycast-cos-vals
+  (map (fn [i] (math/cos (/ (* i math/pi) 180))) (range 0 360)))
+
 (defn raycast [center radius]
   (var res @{})
   (set (res [(center :y) (center :x)]) true)
 
-  (loop [i :range [0 360]]
-    (def ax (math/sin (/ (* i math/pi) 180)))
-    (def ay (math/cos (/ (* i math/pi) 180)))
+  (loop [i :range [0 360 2]]
+    (def ax (raycast-sin-vals i))
+    (def ay (raycast-cos-vals i))
 
     (var x (center :x))
     (var y (center :y))
