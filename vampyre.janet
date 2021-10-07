@@ -9,6 +9,15 @@
 (def WIDTH  100)
 
 (def sprites [
+    [ "|"
+      0 0 0 0 0 0 0
+      0 0 0 0 0 0 0
+      0 0 1 1 0 0 0
+      0 0 1 1 0 0 0
+      0 0 0 0 0 0 0
+      0 0 0 0 0 0 0
+      0 0 0 0 0 0 0
+    ]
     [ "*"
       0 0 0 0 0 0 0
       0 0 0 0 0 0 0
@@ -30,6 +39,11 @@
 ])
 
 (var msg "chilly...")
+(var user-goto nil)
+(var startx 0)
+(var starty 0)
+(var endx 0)
+(var endy 0)
 
 (def T_WALL  0)
 (def T_FLOOR 1)
@@ -61,6 +75,13 @@
   (if (or (< (r :x) 0) (< (r :y) 0) (>= (r :x) WIDTH) (>= (r :y) HEIGHT))
     nil
     (table/setproto r coord-proto)))
+
+(defn manhattan-distance [a b]
+  (def diff [ (math/abs (- (a 0) (b 0)))
+              (math/abs (- (a 1) (b 1)))
+            ])
+  (+ (diff 0) (diff 1)))
+
 (defn at-dungeon [coord]
   ((dungeon (coord :y)) (coord :x)))
 
@@ -145,18 +166,103 @@
 
   res)
 
-(defn draw []
-  (fill 0 0 width height " ")
+(defn astar [start goal hfn]
+  (defn node-f [self]
+    (+ (self :g) (self :h)))
 
+  (def directions [ [ -1   0 ]
+                    [  1   0 ]
+                    [  0   1 ]
+                    [  0  -1 ]
+                    [ -1  -1 ]
+                    [ -1   1 ]
+                    [  1  -1 ]
+                    [  1   1 ]
+                  ])
+
+  (cond
+    (not (:walkable? (at-dungeon (new-coord (goal 1) (goal 0) 0)))) (break nil)
+    (= start goal) (break @[goal]))
+
+  (var closed-list @[])
+  (var open-list @[])
+  (array/push open-list @{ :coord start
+                           :parent nil
+                           :g 0
+                           :h (hfn start goal)
+                         })
+
+  (var res nil)
+
+  (while (> (length open-list) 0)
+    (var cur nil)
+    (var best-fscore 9999)
+    (var cur-ind 0)
+
+    (var i 0)
+    (loop [node :in open-list]
+      (def fscore (node-f node))
+      (if (< fscore best-fscore)
+        (do
+          (set cur node)
+          (set best-fscore fscore)
+          (set cur-ind i)))
+      (++ i))
+
+    (array/remove open-list cur-ind)
+
+    (if (= (cur :coord) goal)
+      (do
+        (set res @[])
+        (while (cur :parent)
+          (array/push res (cur :coord))
+          (def parent (cur :parent))
+          (set cur nil)
+          (loop [node :in closed-list :until cur]
+            (if (= (node :coord) parent)
+              (set cur node))))
+        (break)))
+
+    (loop [direction :in directions]
+      (def neighbor [(+ ((cur :coord) 0) (direction 0))
+                     (+ ((cur :coord) 1) (direction 1))])
+      (var neighbor-g (+ (cur :g) 1))
+
+      (if (and (:walkable? (at-dungeon (new-coord (neighbor 1) (neighbor 0) 0)))
+               (= 0 (length (filter (fn [c] (= (c :coord) neighbor)) closed-list))))
+        (do
+          (var already nil)
+          (var i 0)
+          (loop [node :in open-list :until already]
+            (if (= neighbor (node :coord))
+                (set already i))
+            (++ i))
+
+          (if (and already (< neighbor-g ((open-list already) :g)))
+              (array/remove open-list already))
+
+          (array/push open-list @{ :coord neighbor
+                                   :parent (cur :coord)
+                                   :g neighbor-g
+                                   :h (hfn neighbor goal)
+                                 }))))
+      (array/push closed-list cur))
+
+  res)
+
+(defn calc-display-offsets []
   (def player-coord ((mobs player) :coord))
-
   (def mapwidth (- width 1))
   (def mapheight (- height 2))
 
-  (def startx (max 0 (- (player-coord :x) (//  mapwidth 2))))
-  (def starty (max 0 (- (player-coord :y) (// mapheight 2))))
-  (def endx (min  WIDTH (+ (player-coord :x) (//  mapwidth 2))))
-  (def endy (min HEIGHT (+ (player-coord :y) (// mapheight 2))))
+  (set startx (max 0 (- (player-coord :x) (//  mapwidth 2))))
+  (set starty (max 0 (- (player-coord :y) (// mapheight 2))))
+  (set endx (min  WIDTH (+ (player-coord :x) (//  mapwidth 2))))
+  (set endy (min HEIGHT (+ (player-coord :y) (// mapheight 2)))))
+
+(defn draw []
+  (fill 0 0 width height " ")
+  (calc-display-offsets)
 
   (var y 0)
   (loop [my :range [starty endy]]
@@ -188,7 +294,16 @@
     (++ y))
  
   (color 0x0E)
-  (c7put 0 (- height 1) msg))
+  (c7put 0 (- height 1) msg)
+  
+  (if user-goto
+    (do
+      (color 12)
+      (loop [coord :in user-goto]
+        (def dx (- (coord 1) startx))
+        (def dy (- (coord 0) starty))
+        (c7put dx dy "|"))
+      (set user-goto nil))))
 
 (defn mapgen []
   (var cur (new-coord (/ WIDTH 2) (/ HEIGHT 2) 0))
@@ -299,3 +414,14 @@
         (= k "n")                (:move-mob (mobs player) D_SE))
   (tick)
   (draw))
+
+(defn mouse [type evnum x y]
+  (if (= type "left")
+    (do
+      (def cell-x (+ startx (math/round (/ x 7 scale))))
+      (def cell-y (+ starty (math/round (/ y 7 scale))))
+      (def player-coord ((mobs player) :coord))
+      (set user-goto (astar [(player-coord :y) (player-coord :x)]
+                            [cell-y cell-x]
+                            manhattan-distance))
+      (draw))))
