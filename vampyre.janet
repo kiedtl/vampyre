@@ -1,7 +1,9 @@
 (def title "Vampyre")
-(def height 28)
-(def width 28)
-(def scale 3)
+(def debug false)
+
+(def height (if debug 100 28))
+(def width  (if debug 100 28))
+(def scale  (if debug   1  3))
 
 (def HEIGHT 100)
 (def WIDTH  100)
@@ -69,6 +71,50 @@
     (/= accm arg))
   (math/round accm))
 
+(defn bresenham-circle [center radius]
+  (defn add-coord [buf x y]
+    (if (and (>= x 0) (>= y 0) (< x WIDTH) (< y HEIGHT))
+      (array/push buf [y x])))
+
+  (var res @[])
+
+  (def circum (math/ceil (* (* math/pi 2) radius)))
+  (def x (center :x))
+  (def y (center :y))
+
+  (var f (- 1 radius))
+  (var ddf-x 0)
+  (var ddf-y (* -2 radius))
+  (var dx 0)
+  (var dy radius)
+
+  (add-coord res x (+ y radius))
+  (add-coord res x (- y radius))
+  (add-coord res (+ x radius) y)
+  (add-coord res (- x radius) y)
+
+  (while (< dx dy)
+    (if (>= f 0)
+      (do
+        (-- dy)
+        (+= ddf-y 2)
+        (+= f ddf-y)))
+
+    (+= dx 1)
+    (+= ddf-x 2)
+    (+= f (+ ddf-x 1))
+
+    (add-coord res (+ x dx) (+ y dy))
+    (add-coord res (- x dx) (+ y dy))
+    (add-coord res (+ x dx) (- y dy))
+    (add-coord res (- x dx) (- y dy))
+    (add-coord res (+ x dy) (+ y dx))
+    (add-coord res (- x dy) (+ y dx))
+    (add-coord res (+ x dy) (- y dx))
+    (add-coord res (- x dy) (- y dx)))
+
+  res)
+
 (defn draw []
   (fill 0 0 width height " ")
 
@@ -95,7 +141,7 @@
             (@ T_FLOOR) 0x0E)
           (if (memory [my mx])
             0x0F
-            0x00)))
+            (if debug 0x0F 0x00))))
 
       (var s
         (match (tile :type)
@@ -116,19 +162,35 @@
 
 (defn mapgen []
   (var cur (new-coord (/ WIDTH 2) (/ HEIGHT 2) 0))
+  (var run 1)
   (var last-dir D_N)
 
-  (loop [_ :range [0 5000]]
+  (loop [_ :range [0 6000]]
     (set ((at-dungeon cur) :type) T_FLOOR)
-    (def rnd (% (* (math/random) 100) 6))
-    (def new-dir (cond
-                   (< rnd 1) D_N
-                   (< rnd 2) D_S
-                   (< rnd 3) D_E
-                   (< rnd 4) D_W
-                   last-dir))
-    (set cur (or (add-xy cur new-dir) cur))
-    (set last-dir new-dir)))
+    (-- run)
+    (if (<= run 0)
+      (do
+        (def rnd (% (* (math/random) 100) 6))
+        (def new-dir (cond
+                       (< rnd 1) D_N
+                       (< rnd 2) D_S
+                       (< rnd 3) D_E
+                       (< rnd 4) D_W
+                       last-dir))
+        (set cur (or (add-xy cur new-dir) cur))
+        (set run (math/round (% (* (math/random) 10) 4)))
+        (set last-dir new-dir))
+      (set cur (or (add-xy cur last-dir) cur))))
+  
+  (loop [_ :range [0 15]]
+    (def rx (math/round (% (* (math/random) 1000) WIDTH)))
+    (def ry (math/round (% (* (math/random) 1000) HEIGHT)))
+    (def max-radius (+ 2 (math/round (% (* (math/random) 1000) 10))))
+
+    (loop [radius :range [1 max-radius]]
+      (def circle (bresenham-circle (new-coord rx ry 0) radius))
+      (loop [coord :in circle]
+        (set ((at-dungeon (new-coord (coord 0) (coord 1) 0)) :type) T_FLOOR)))))
 
 (def raycast-sin-vals
   (map (fn [i] (math/sin (/ (* i math/pi) 180))) (range 0 360)))
