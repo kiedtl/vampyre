@@ -9,7 +9,25 @@
 (def WIDTH  100)
 
 (def sprites [
+    [ "["
+      1 1 1 1 1 1 0
+      1 1 0 1 0 1 0
+      1 1 0 1 0 1 0
+      1 1 0 1 0 1 0
+      1 1 0 1 0 1 0
+      1 1 1 1 1 1 0
+      0 0 0 0 0 0 0
+    ]
     [ "|"
+      1 1 1 1 1 1 0
+      1 0 0 0 0 1 0
+      1 0 0 0 0 1 0
+      1 0 0 0 0 1 0
+      1 0 0 0 0 1 0
+      1 1 1 1 1 1 0
+      0 0 0 0 0 0 0
+    ]
+    [ "&"
       0 0 0 0 0 0 0
       0 0 0 0 0 0 0
       0 0 1 1 0 0 0
@@ -47,11 +65,15 @@
 
 (def T_WALL  0)
 (def T_FLOOR 1)
+(def T_DOORC 2)
+(def T_DOORO 3)
 (def tile-proto @{ :type T_WALL
                    :mob -1
                    :walkable? (fn [tile]
                                 (and
-                                  (= (tile :type) T_FLOOR)
+                                  (or
+                                    (= (tile :type) T_FLOOR)
+                                    (= (tile :type) T_DOORO))
                                   (= (tile :mob) -1)))
                  })
 (var dungeon (array/new HEIGHT))
@@ -65,11 +87,29 @@
 (def D_SW @{ :x -1 :y  1 })
 (def D_SE @{ :x  1 :y  1 })
 
+(def directions [ [ -1  -1 ] # NW
+                  [ -1   0 ] # N
+                  [ -1   1 ] # NE
+                  [  0  -1 ] # W
+                  [  0   1 ] # E
+                  [  1  -1 ] # SW
+                  [  1   0 ] # S
+                  [  1   1 ] # SE
+                ])
+
 (var coord-proto @{ :x 0 :y 0 :z 0 })
 (defn new-coord [x y z]
   (table/setproto @{ :x x :y y :z z} coord-proto))
+
 (defn eq-coord [a b]
   (and (= (a :x) (b :x)) (= (a :y) (b :y)) (= (a :z) (b :z))))
+
+(defn coord-add-xy2 [a b]
+  (def r [(+ (a 0) (b 0)) (+ (a 1) (b 1))])
+  (if (or (< (r 0) 0) (< (r 1) 0) (>= (r 1) WIDTH) (>= (r 0) HEIGHT))
+    nil
+    r))
+
 (defn add-xy [a b]
   (var r @{ :x (+ (a :x) (b :x)) :y (+ (a :y) (b :y)) })
   (if (or (< (r :x) 0) (< (r :y) 0) (>= (r :x) WIDTH) (>= (r :y) HEIGHT))
@@ -85,6 +125,9 @@
 (defn at-dungeon [coord]
   ((dungeon (coord :y)) (coord :x)))
 
+(defn at-dungeon2 [coord]
+  ((dungeon (coord 0)) (coord 1)))
+
 (def mob-proto @{ :id -1
                   :tile "g"
                   :coord (new-coord -1 -1 0)
@@ -95,12 +138,21 @@
                   :move-mob (fn [mob dir]
                               (def src (mob :coord))
                               (def dst (add-xy src dir))
-                              (if (and dst (:walkable? (at-dungeon dst)))
+                              (if dst
                                 (do
-                                  (set ((at-dungeon src) :mob) -1)
-                                  (set ((at-dungeon dst) :mob) (mob :id))
-                                  (set (mob :coord) dst)
-                                  true)
+                                  (def tile (at-dungeon dst))
+                                  (cond
+                                    (= (tile :type) T_DOORC)
+                                      (do
+                                        (set (tile :type) T_DOORO)
+                                        true)
+                                    (:walkable? (at-dungeon dst))
+                                      (do
+                                        (set ((at-dungeon src) :mob) -1)
+                                        (set ((at-dungeon dst) :mob) (mob :id))
+                                        (set (mob :coord) dst)
+                                        true)
+                                    false))
                                 false))
                 })
 (var mobs @[])
@@ -176,19 +228,12 @@
     (+ (self :g) (self :h)))
 
   (defn node-valid? [self restrict]
-      (and (:walkable? (at-dungeon (new-coord (self 1) (self 0) 0)))
-           (or (not restrict)
-               (and restrict (or (((mobs player) :fov) self) (memory self))))))
-
-  (def directions [ [ -1   0 ]
-                    [  1   0 ]
-                    [  0   1 ]
-                    [  0  -1 ]
-                    [ -1  -1 ]
-                    [ -1   1 ]
-                    [  1  -1 ]
-                    [  1   1 ]
-                  ])
+    (def coord (new-coord (self 1) (self 0) 0))
+    (and (or
+           (:walkable? (at-dungeon coord))
+           (= ((at-dungeon coord) :type) T_DOORC))
+         (or (not restrict)
+             (and restrict (or (((mobs player) :fov) self) (memory self))))))
 
   (cond
     (not (node-valid? goal &restrict)) (break nil)
@@ -233,8 +278,7 @@
         (break)))
 
     (loop [direction :in directions]
-      (def neighbor [(+ ((cur :coord) 0) (direction 0))
-                     (+ ((cur :coord) 1) (direction 1))])
+      (def neighbor (coord-add-xy2 (cur :coord) direction))
       (var neighbor-g (+ (cur :g) 1))
       (def existing-node (nodes neighbor))
 
@@ -287,6 +331,8 @@
         (if (((mobs player) :fov) [my mx])
           (match (tile :type)
             (@ T_WALL)  0x0D
+            (@ T_DOORC) 0x0C
+            (@ T_DOORO) 0x0C
             (@ T_FLOOR) 0x0E)
           (if (memory [my mx])
             0x0F
@@ -294,6 +340,8 @@
 
       (var s
         (match (tile :type)
+          (@ T_DOORC) "["
+          (@ T_DOORO) "|"
           (@ T_WALL)  "#"
           (@ T_FLOOR) "*"))
 
@@ -315,7 +363,8 @@
       (loop [coord :in user-goto]
         (def dx (- (coord 1) startx))
         (def dy (- (coord 0) starty))
-        (c7put dx dy "|"))
+        (if (= ((at-dungeon2 coord) :type) T_FLOOR)
+          (c7put dx dy "&")))
       (set user-goto nil))))
 
 (defn mapgen []
@@ -348,7 +397,38 @@
     (loop [radius :range [1 max-radius]]
       (def circle (bresenham-circle (new-coord rx ry 0) radius))
       (loop [coord :in circle]
-        (set ((at-dungeon (new-coord (coord 0) (coord 1) 0)) :type) T_FLOOR)))))
+        (set ((at-dungeon (new-coord (coord 0) (coord 1) 0)) :type) T_FLOOR))))
+  
+  (loop [y :range [0 HEIGHT]]
+    (loop [x :range [0 WIDTH]]
+      (if (= ((at-dungeon2 [y x]) :type) T_FLOOR)
+        (do
+          (var pattern @[])
+          (loop [direction :in directions]
+            (def new (coord-add-xy2 [y x] direction))
+            (if new
+              (array/push pattern (match ((at-dungeon2 new) :type)
+                                    (@ T_FLOOR) "."
+                                    _           "#"))
+              (array/push pattern "#")))
+
+          # convert array to tuple so we can cmp it with another tuple
+          (var pattern (tuple/slice pattern 0))
+
+          (if (or (= pattern ["#" "#" "." "." "." "#" "#" "#"])
+                  (= pattern ["." "#" "#" "." "." "#" "#" "#"])
+                  (= pattern ["#" "#" "#" "." "." "#" "#" "."])
+                  (= pattern ["#" "#" "#" "." "." "." "#" "#"])
+                  (= pattern ["#" "#" "." "." "." "#" "#" "."])
+                  (= pattern ["." "#" "#" "." "." "." "#" "#"])
+                  (= pattern ["." "." "#" "#" "#" "#" "." "#"])
+                  (= pattern ["#" "." "." "#" "#" "#" "." "#"])
+                  (= pattern ["#" "." "#" "#" "#" "." "." "#"])
+                  (= pattern ["#" "." "#" "#" "#" "#" "." "."])
+                  (= pattern ["." "." "#" "#" "#" "." "." "#"])
+                  (= pattern ["#" "." "." "#" "#" "#" "." "."]))
+            (if (< 0.75 (math/random))
+              (set ((at-dungeon2 [y x]) :type) T_DOORC))))))))
 
 (def raycast-sin-vals
   (map (fn [i] (math/sin (/ (* i math/pi) 180))) (range 0 360)))
@@ -380,8 +460,8 @@
         (do
           (set (res [iy ix]) true)
           (if (and
-                (not= ((at-dungeon coord) :type) T_FLOOR)
-                (not  (eq-coord coord center)))
+                (=   ((at-dungeon coord) :type) T_WALL)
+                (not (eq-coord coord center)))
             (set ray-dead true)))
         (set ray-dead true))))
   res)
@@ -399,7 +479,6 @@
     (put dungeon y (array/new WIDTH))
     (loop [x :range [0 WIDTH]]
       (put (get dungeon y) x (table/setproto @{} tile-proto))))
-  (mapgen)
 
   (set player (length mobs))
   (def player-coord (new-coord (/ WIDTH 2) (/ HEIGHT 2) 0))
@@ -409,6 +488,8 @@
                      })
   (array/push mobs (table/setproto player-obj mob-proto))
   (set ((at-dungeon player-coord) :mob) player)
+
+  (mapgen)
 
   (tick)
   (draw))
