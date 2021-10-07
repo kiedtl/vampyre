@@ -166,12 +166,19 @@
 
   res)
 
-(defn astar [start goal hfn]
+# If &restrict is truthy, then the algorithm will consider tiles
+# that the player cannot see or remember as blocking
+(defn astar [start goal hfn &restrict]
   (def NODE_CLOSED 0)
   (def NODE_OPEN 1)
 
   (defn node-f [self]
     (+ (self :g) (self :h)))
+
+  (defn node-valid? [self restrict]
+      (and (:walkable? (at-dungeon (new-coord (self 1) (self 0) 0)))
+           (or (not restrict)
+               (and restrict (or (((mobs player) :fov) self) (memory self))))))
 
   (def directions [ [ -1   0 ]
                     [  1   0 ]
@@ -184,7 +191,7 @@
                   ])
 
   (cond
-    (not (:walkable? (at-dungeon (new-coord (goal 1) (goal 0) 0)))) (break nil)
+    (not (node-valid? goal &restrict)) (break nil)
     (= start goal) (break @[goal]))
 
   (var nodes @{})
@@ -231,7 +238,7 @@
       (var neighbor-g (+ (cur :g) 1))
       (def existing-node (nodes neighbor))
 
-      (if (and (:walkable? (at-dungeon (new-coord (neighbor 1) (neighbor 0) 0)))
+      (if (and (node-valid? neighbor &restrict)
                (or (not existing-node) (= (existing-node :state) NODE_OPEN)))
         (do
           (if (and existing-node
@@ -426,8 +433,10 @@
     (do
       (def cell-x (+ startx (math/round (/ x 7 scale))))
       (def cell-y (+ starty (math/round (/ y 7 scale))))
-      (def player-coord ((mobs player) :coord))
-      (set user-goto (astar [(player-coord :y) (player-coord :x)]
-                            [cell-y cell-x]
-                            manhattan-distance))
+      (if (or (((mobs player) :fov) [cell-y cell-x])
+              (memory [cell-y cell-x]))
+        (do
+          (def player-coord ((mobs player) :coord))
+          (set user-goto (astar [(player-coord :y) (player-coord :x)]
+                                [cell-y cell-x] manhattan-distance true))))
       (draw))))
