@@ -167,6 +167,9 @@
   res)
 
 (defn astar [start goal hfn]
+  (def NODE_CLOSED 0)
+  (def NODE_OPEN 1)
+
   (defn node-f [self]
     (+ (self :g) (self :h)))
 
@@ -184,13 +187,15 @@
     (not (:walkable? (at-dungeon (new-coord (goal 1) (goal 0) 0)))) (break nil)
     (= start goal) (break @[goal]))
 
-  (var closed-list @[])
+  (var nodes @{})
   (var open-list @[])
-  (array/push open-list @{ :coord start
-                           :parent nil
-                           :g 0
-                           :h (hfn start goal)
-                         })
+  (set (nodes start) @{ :coord start
+                        :parent nil
+                        :g 0
+                        :h (hfn start goal)
+                        :state NODE_OPEN
+                      })
+  (array/push open-list start)
 
   (var res nil)
 
@@ -200,11 +205,11 @@
     (var cur-ind 0)
 
     (var i 0)
-    (loop [node :in open-list]
-      (def fscore (node-f node))
+    (loop [coord :in open-list]
+      (def fscore (node-f (nodes coord)))
       (if (< fscore best-fscore)
         (do
-          (set cur node)
+          (set cur (nodes coord))
           (set best-fscore fscore)
           (set cur-ind i)))
       (++ i))
@@ -217,36 +222,37 @@
         (while (cur :parent)
           (array/push res (cur :coord))
           (def parent (cur :parent))
-          (set cur nil)
-          (loop [node :in closed-list :until cur]
-            (if (= (node :coord) parent)
-              (set cur node))))
+          (set cur (nodes (cur :parent))))
         (break)))
 
     (loop [direction :in directions]
       (def neighbor [(+ ((cur :coord) 0) (direction 0))
                      (+ ((cur :coord) 1) (direction 1))])
       (var neighbor-g (+ (cur :g) 1))
+      (def existing-node (nodes neighbor))
 
       (if (and (:walkable? (at-dungeon (new-coord (neighbor 1) (neighbor 0) 0)))
-               (= 0 (length (filter (fn [c] (= (c :coord) neighbor)) closed-list))))
+               (or (not existing-node) (= (existing-node :state) NODE_OPEN)))
         (do
-          (var already nil)
-          (var i 0)
-          (loop [node :in open-list :until already]
-            (if (= neighbor (node :coord))
-                (set already i))
-            (++ i))
+          (if (and existing-node
+                   (= (existing-node :state) NODE_OPEN)
+                   (> neighbor-g (existing-node :g)))
+            (do
+              (var ind 0)
+              (loop [coord :in open-list]
+                (if (= coord neighbor) (break))
+                (++ ind))
+              (array/remove open-list ind)))
 
-          (if (and already (< neighbor-g ((open-list already) :g)))
-              (array/remove open-list already))
-
-          (array/push open-list @{ :coord neighbor
+          (set (nodes neighbor) @{ :coord neighbor
                                    :parent (cur :coord)
                                    :g neighbor-g
                                    :h (hfn neighbor goal)
-                                 }))))
-      (array/push closed-list cur))
+                                   :state NODE_OPEN
+                                   :ol-ind (length open-list)
+                                 })
+          (array/push open-list neighbor))))
+      (set (cur :state) NODE_CLOSED))
 
   res)
 
