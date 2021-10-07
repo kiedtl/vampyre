@@ -8,6 +8,26 @@
 (def HEIGHT 100)
 (def WIDTH  100)
 
+(def sprites [
+    [ "*"
+      0 0 0 0 0 0 0
+      0 0 0 0 0 0 0
+      0 0 0 0 0 0 0
+      0 0 0 1 0 0 0
+      0 0 0 0 0 0 0
+      0 0 0 0 0 0 0
+      0 0 0 0 0 0 0
+    ]
+    [ "#"
+      1 1 1 1 1 1 0
+      0 0 0 0 0 1 0
+      1 0 1 1 1 1 0
+      0 0 0 1 0 0 0
+      1 1 1 1 1 1 0
+      1 0 1 1 0 1 0
+    ]
+])
+
 (var msg "chilly...")
 
 (def T_WALL  0)
@@ -64,6 +84,15 @@
 (var mobs @[])
 (var player -1)
 (var memory @{})
+
+(defn load-sprites [data]
+    (loop [sprite :in data]
+        (def char (- ((string/bytes (sprite 0)) 0) 32))
+        (def offset (+ 0x4040 (* char 7 7)))
+        (var i 0)
+        (loop [pixel :in (tuple/slice sprite 1)]
+          (poke (+ offset i) pixel)
+          (++ i))))
 
 (defn // [arg1 & args]
   (var accm arg1)
@@ -146,7 +175,7 @@
       (var s
         (match (tile :type)
           (@ T_WALL)  "#"
-          (@ T_FLOOR) "."))
+          (@ T_FLOOR) "*"))
 
       (if (not= (tile :mob) -1)
         (do
@@ -235,11 +264,14 @@
     (set (memory coord) true)))
 
 (defn init []
+  (load-sprites sprites)
+
   (loop [y :range [0 HEIGHT]]
     (put dungeon y (array/new WIDTH))
     (loop [x :range [0 WIDTH]]
       (put (get dungeon y) x (table/setproto @{} tile-proto))))
   (mapgen)
+
   (set player (length mobs))
   (def player-coord (new-coord (/ WIDTH 2) (/ HEIGHT 2) 0))
   (def player-obj @{ :id player
@@ -248,6 +280,7 @@
                      })
   (array/push mobs (table/setproto player-obj mob-proto))
   (set ((at-dungeon player-coord) :mob) player)
+
   (tick)
   (draw))
 
