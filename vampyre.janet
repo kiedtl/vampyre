@@ -1,12 +1,12 @@
 (def title "Vampyre")
-(def debug false)
+(def debug true)
 
-(def height (if debug 90 28))
-(def width  (if debug 90 28))
-(def scale  (if debug  1  3))
+(def height (if debug 110 28))
+(def width  (if debug 110 28))
+(def scale  (if debug   1  3))
 
-(def HEIGHT 80)
-(def WIDTH  80)
+(def HEIGHT 100)
+(def WIDTH  100)
 
 (def sprites [
     [ "["
@@ -412,8 +412,9 @@
           (set ((at-dungeon2 ncoord) :type) T_FLOOR)
           (dig-maze ncoord)))))
 
-  (dig-maze [0 0])
-  (fill-random-circles 50 9 T_WALL)
+  # Disabled for now.
+  #(dig-maze [0 0])
+  #(fill-random-circles 50 9 T_WALL)
 
   (var cur (new-coord (/ WIDTH 2) (/ HEIGHT 2) 0))
   (var run 1)
@@ -436,7 +437,7 @@
         (set last-dir new-dir))
       (set cur (or (add-xy cur last-dir) cur))))
 
-  (fill-random-circles 15 10 T_FLOOR)
+  (fill-random-circles 10 10 T_FLOOR)
   
   (loop [y :range [0 HEIGHT]]
     (loop [x :range [0 WIDTH]]
