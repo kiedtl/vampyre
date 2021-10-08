@@ -78,6 +78,8 @@
                  })
 (var dungeon (array/new HEIGHT))
 
+(var fuses @[])
+
 (def D_N  @{ :x  0 :y -1 })
 (def D_S  @{ :x  0 :y  1 })
 (def D_E  @{ :x  1 :y  0 })
@@ -145,6 +147,9 @@
                                     (= (tile :type) T_DOORC)
                                       (do
                                         (set (tile :type) T_DOORO)
+                                        (array/push fuses @[4 (fn [c]
+                                                               (set (tile :type) T_DOORC))
+                                                           dst])
                                         true)
                                     (:walkable? (at-dungeon dst))
                                       (do
@@ -470,7 +475,20 @@
   (loop [mob :in mobs]
     (set (mob :fov) (raycast (mob :coord) (mob :fov-radius))))
   (loop [coord :keys ((mobs player) :fov)]
-    (set (memory coord) true)))
+    (set (memory coord) true))
+
+  (var dead-fuses @[]) 
+  (var fuse-i 0) 
+  (loop [fuse :in fuses]
+    (if (= 0 (fuse 0))
+      (do
+        ((fuse 1) (fuse 2))
+        (array/push dead-fuses fuse-i)))
+    (-- (fuse 0))
+    (++ fuse-i))
+  
+  (loop [dead-fuse :in dead-fuses]
+    (array/remove fuses dead-fuse)))
 
 (defn init []
   (load-sprites sprites)
