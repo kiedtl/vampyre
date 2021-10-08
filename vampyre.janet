@@ -1,12 +1,12 @@
 (def title "Vampyre")
 (def debug false)
 
-(def height (if debug 100 28))
-(def width  (if debug 100 28))
-(def scale  (if debug   1  3))
+(def height (if debug 90 28))
+(def width  (if debug 90 28))
+(def scale  (if debug  1  3))
 
-(def HEIGHT 100)
-(def WIDTH  100)
+(def HEIGHT 80)
+(def WIDTH  80)
 
 (def sprites [
     [ "["
@@ -108,13 +108,15 @@
 
 (defn coord-add-xy2 [a b]
   (def r [(+ (a 0) (b 0)) (+ (a 1) (b 1))])
-  (if (or (< (r 0) 0) (< (r 1) 0) (>= (r 1) WIDTH) (>= (r 0) HEIGHT))
+  (if (or (< (r 0) 0) (< (r 1) 0)
+          (>= (r 1) (- WIDTH 1)) (>= (r 0) (- HEIGHT 1)))
     nil
     r))
 
 (defn add-xy [a b]
   (var r @{ :x (+ (a :x) (b :x)) :y (+ (a :y) (b :y)) })
-  (if (or (< (r :x) 0) (< (r :y) 0) (>= (r :x) WIDTH) (>= (r :y) HEIGHT))
+  (if (or (< (r :x) 1) (< (r :y) 1)
+          (>= (r :x) (- WIDTH 1)) (>= (r :y) (- HEIGHT 1)))
     nil
     (table/setproto r coord-proto)))
 
