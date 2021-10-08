@@ -63,17 +63,13 @@
 (var endx 0)
 (var endy 0)
 
-(def T_WALL  0)
-(def T_FLOOR 1)
-(def T_DOORC 2)
-(def T_DOORO 3)
-(def tile-proto @{ :type T_WALL
+(def tile-proto @{ :type :wall
                    :mob -1
                    :walkable? (fn [tile]
                                 (and
                                   (or
-                                    (= (tile :type) T_FLOOR)
-                                    (= (tile :type) T_DOORO))
+                                    (= (tile :type) :floor)
+                                    (= (tile :type) :open-door))
                                   (= (tile :mob) -1)))
                  })
 (var dungeon (array/new HEIGHT))
@@ -123,11 +119,11 @@
                                 (do
                                   (def tile (at-dungeon dst))
                                   (cond
-                                    (= (tile :type) T_DOORC)
+                                    (= (tile :type) :closed-door)
                                       (do
-                                        (set (tile :type) T_DOORO)
+                                        (set (tile :type) :open-door)
                                         (array/push fuses @[4 (fn [c]
-                                                               (set (tile :type) T_DOORC))
+                                                               (set (tile :type) :closed-door))
                                                            dst])
                                         true)
                                     (:walkable? (at-dungeon dst))
@@ -222,7 +218,7 @@
   (defn node-valid? [self restrict]
     (and (or
            (:walkable? (at-dungeon self))
-           (= ((at-dungeon self) :type) T_DOORC))
+           (= ((at-dungeon self) :type) :closed-door))
          (or (not restrict)
              (and restrict (or (((mobs player) :fov) self) (memory self))))))
 
@@ -321,20 +317,20 @@
       (color
         (if (((mobs player) :fov) [my mx])
           (match (tile :type)
-            (@ T_WALL)  0x0D
-            (@ T_DOORC) 0x0C
-            (@ T_DOORO) 0x0C
-            (@ T_FLOOR) 0x0E)
+            (@ :wall) 0x0D
+            (@ :closed-door) 0x0C
+            (@ :open-door) 0x0C
+            (@ :floor) 0x0E)
           (if (memory [my mx])
             0x0F
             (if debug 0x0F 0x00))))
 
       (var s
         (match (tile :type)
-          (@ T_DOORC) "["
-          (@ T_DOORO) "|"
-          (@ T_WALL)  "#"
-          (@ T_FLOOR) "*"))
+          (@ :closed-door) "["
+          (@ :open-door) "|"
+          (@ :wall) "#"
+          (@ :floor) "*"))
 
       (if (not= (tile :mob) -1)
         (do
@@ -354,7 +350,7 @@
       (loop [coord :in user-goto]
         (def dx (- (coord 1) startx))
         (def dy (- (coord 0) starty))
-        (if (= ((at-dungeon coord) :type) T_FLOOR)
+        (if (= ((at-dungeon coord) :type) :floor)
           (c7put dx dy "&")))
       (set user-goto nil))))
 
@@ -381,22 +377,22 @@
       (def icoord (coord-add coord (neighbor 0)))
       (def ncoord (coord-add coord (neighbor 1)))
       (if (and icoord ncoord
-               (not= ((at-dungeon ncoord) :type) T_FLOOR))
+               (not= ((at-dungeon ncoord) :type) :floor))
         (do
-          (set ((at-dungeon icoord) :type) T_FLOOR)
-          (set ((at-dungeon ncoord) :type) T_FLOOR)
+          (set ((at-dungeon icoord) :type) :floor)
+          (set ((at-dungeon ncoord) :type) :floor)
           (dig-maze ncoord)))))
 
   # Disabled for now.
   #(dig-maze [0 0])
-  #(fill-random-circles 50 9 T_WALL)
+  #(fill-random-circles 50 9 :wall)
 
   (var cur [(/ WIDTH 2) (/ HEIGHT 2)])
   (var run 1)
   (var last-dir D_N)
 
   (loop [_ :range [0 10000]]
-    (set ((at-dungeon cur) :type) T_FLOOR)
+    (set ((at-dungeon cur) :type) :floor)
     (-- run)
     (if (<= run 0)
       (do
@@ -412,18 +408,18 @@
         (set last-dir new-dir))
       (set cur (or (coord-add cur last-dir) cur))))
 
-  (fill-random-circles 10 10 T_FLOOR)
+  (fill-random-circles 10 10 :floor)
   
   (loop [y :range [0 HEIGHT]]
     (loop [x :range [0 WIDTH]]
-      (if (= ((at-dungeon [y x]) :type) T_FLOOR)
+      (if (= ((at-dungeon [y x]) :type) :floor)
         (do
           (var pattern @[])
           (loop [direction :in directions]
             (def new (coord-add [y x] direction))
             (if new
               (array/push pattern (match ((at-dungeon new) :type)
-                                    (@ T_FLOOR) "."
+                                    (@ :floor) "."
                                     _           "#"))
               (array/push pattern "#")))
 
@@ -443,7 +439,7 @@
                   (= pattern ["." "." "#" "#" "#" "." "." "#"])
                   (= pattern ["#" "." "." "#" "#" "#" "." "."]))
             (if (< 0.75 (math/random))
-              (set ((at-dungeon [y x]) :type) T_DOORC))))))))
+              (set ((at-dungeon [y x]) :type) :closed-door))))))))
 
 (def raycast-sin-vals
   (map (fn [i] (math/sin (/ (* i math/pi) 180))) (range 0 360)))
@@ -474,7 +470,7 @@
         (do
           (set (res [iy ix]) true)
           (if (and
-                (=   ((at-dungeon [iy ix]) :type) T_WALL)
+                (=   ((at-dungeon [iy ix]) :type) :wall)
                 (not= [iy ix] center))
             (set ray-dead true)))
         (set ray-dead true))))
