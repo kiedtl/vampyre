@@ -163,6 +163,58 @@
     (/= accm arg))
   (math/round accm))
 
+(defn shadowcast [from radius]
+  (def mult [ [  1  0  0 -1 -1  0  0  1 ]
+              [  0  1 -1  0  0 -1  1  0 ]
+              [  0  1  1  0  0 -1 -1  0 ]
+              [  1  0  0  1 -1  0  0 -1 ]
+            ])
+  (defn cast-light [buf coord row start_p end radius coordx coordy]
+    (if (< start_p end) (break))
+    (var start start_p)
+    (var new-start 0)
+    (var j row)
+    (var stepj (if (< row radius) 1 -1))
+    (while (< j radius)
+      (def dy (- j))
+      (var dx (- (- j) 1))
+      (var blocked false)
+      (while (<= dx 0)
+        (++ dx)
+        (def curx (+ (coord 1) (* dx (coordx 1)) (* dy (coordx 0))))
+        (def cury (+ (coord 0) (* dx (coordy 1)) (* dy (coordy 0))))
+        (def cur [cury curx])
+        (if (coord-valid? cur)
+          (do
+            (def l-slope (/ (- dx 0.5) (+ dy 0.5)))
+            (def r-slope (/ (+ dx 0.5) (- dy 0.5)))
+            (if (>= start r-slope)
+              (do
+                (if (> end l-slope) (break))
+                (if (<= (+ (* dx dx) (* dy dy)) (* radius radius))
+                  (set (buf cur) true))
+                (if blocked
+                  (if (= ((at-dungeon cur) :type) :wall)
+                    (set new-start r-slope)
+                    (do (set blocked false)
+                        (set start new-start)))
+                  (if (and (= ((at-dungeon cur) :type) :wall)
+                           (< j radius))
+                    (do
+                      (set blocked true)
+                      (cast-light buf coord (+ j 1) start l-slope radius coordx coordy)
+                      (set new-start r-slope)))))))))
+      (if blocked (break))
+      (+= j stepj)))
+
+  (var res @{})
+  (set (res from) true)
+  (loop [octant :range [0 8]]
+    (cast-light res from 1 1 0 radius
+                [((mult 0) octant) ((mult 1) octant)]
+                [((mult 2) octant) ((mult 3) octant)]))
+  res)
+
 (defn bresenham-circle [center radius]
   (defn add-coord [buf x y]
     (if (coord-valid? [y x]) (array/push buf [y x])))
@@ -441,44 +493,9 @@
             (if (< 0.75 (math/random))
               (set ((at-dungeon [y x]) :type) :closed-door))))))))
 
-(def raycast-sin-vals
-  (map (fn [i] (math/sin (/ (* i math/pi) 180))) (range 0 360)))
-
-(def raycast-cos-vals
-  (map (fn [i] (math/cos (/ (* i math/pi) 180))) (range 0 360)))
-
-(defn raycast [center radius]
-  (var res @{})
-  (set (res center) true)
-
-  (loop [i :range [0 360 2]]
-    (def ax (raycast-sin-vals i))
-    (def ay (raycast-cos-vals i))
-
-    (var x (center 1))
-    (var y (center 0))
-
-    (var ray-dead false)
-    (loop [z :range [0 radius] :until ray-dead]
-      (+= x ax)
-      (+= y ay)
-
-      (def ix (math/round x))
-      (def iy (math/round y))
-
-      (if (and (>= ix 0) (>= iy 0) (< ix WIDTH) (< iy HEIGHT))
-        (do
-          (set (res [iy ix]) true)
-          (if (and
-                (=   ((at-dungeon [iy ix]) :type) :wall)
-                (not= [iy ix] center))
-            (set ray-dead true)))
-        (set ray-dead true))))
-  res)
-
 (defn tick []
   (loop [mob :in mobs]
-    (set (mob :fov) (raycast (mob :coord) (mob :fov-radius))))
+    (set (mob :fov) (shadowcast (mob :coord) (mob :fov-radius))))
   (loop [coord :keys ((mobs player) :fov)]
     (set (memory coord) true))
 
