@@ -95,6 +95,12 @@
   (def r [(+ (a 0) (b 0)) (+ (a 1) (b 1))])
   (if (not (coord-valid? r)) nil r))
 
+(defn chebyshev-distance [a b]
+  (def diff [ (math/abs (- (a 0) (b 0)))
+              (math/abs (- (a 1) (b 1)))
+            ])
+  (max (diff 0) (diff 1)))
+
 (defn manhattan-distance [a b]
   (def diff [ (math/abs (- (a 0) (b 0)))
               (math/abs (- (a 1) (b 1)))
@@ -320,12 +326,15 @@
       (var neighbor-g (+ (cur :g) 1))
       (def existing-node (nodes neighbor))
 
+      (if (and (not= (direction 0) 0) (not= (direction 1) 0))
+        (+= neighbor-g 1))
+
       (if (and (node-valid? neighbor &restrict)
-               (or (not existing-node) (= (existing-node :state) NODE_OPEN)))
+               (or (not existing-node) (and (= (existing-node :state) NODE_OPEN)
+                                            (< neighbor-g (existing-node :g)))))
         (do
           (if (and existing-node
-                   (= (existing-node :state) NODE_OPEN)
-                   (> neighbor-g (existing-node :g)))
+                   (< neighbor-g (existing-node :g)))
             (do
               (var ind 0)
               (loop [coord :in open-list]
