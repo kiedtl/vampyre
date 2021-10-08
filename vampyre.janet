@@ -561,8 +561,10 @@
     (do
       (def cell-x (+ startx (math/round (/ x 7 scale))))
       (def cell-y (+ starty (math/round (/ y 7 scale))))
-      (if (or (((mobs player) :fov) [cell-y cell-x])
+      (if (or debug
+              (((mobs player) :fov) [cell-y cell-x])
               (memory [cell-y cell-x]))
         (set user-goto (astar ((mobs player) :coord)
-                              [cell-y cell-x] manhattan-distance true)))
+                              [cell-y cell-x] manhattan-distance
+                              (not debug))))
       (draw))))
