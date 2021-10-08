@@ -109,7 +109,7 @@
                   :coord [-1 -1]
                   :max-hp 10
                   :hp 10
-                  :fov-radius (- (/ (max height width) 2) 3)
+                  :fov-radius 12
                   :fov @{}
                   :move-mob (fn [mob dir]
                               (def src (mob :coord))
