@@ -89,8 +89,8 @@
                   D_E D_SW D_S D_SE ])
 
 (defn coord-valid? [c]
-  (and (>= (c 0) 1) (>= (c 1) 1)
-       (< (c 1) (- WIDTH 1)) (< (c 0) (- HEIGHT 1))))
+  (and (>= (c 0) 0) (>= (c 1) 0)
+       (< (c 1) WIDTH) (< (c 0) HEIGHT)))
 
 (defn coord-add [a b]
   (def r [(+ (a 0) (b 0)) (+ (a 1) (b 1))])
@@ -463,9 +463,15 @@
       (set cur (or (coord-add cur last-dir) cur))))
 
   (fill-random-circles 10 10 :floor)
-  
+ 
+  # Postprocessing
+  #    - Fill in edges
+  #    - Add doors 
   (loop [y :range [0 HEIGHT]]
     (loop [x :range [0 WIDTH]]
+      (if (or (= x 0) (= y 0) (= x (- WIDTH 1)) (= y (- HEIGHT 1)))
+        (set ((at-dungeon [y x]) :type) :wall))
+
       (if (= ((at-dungeon [y x]) :type) :floor)
         (do
           (var pattern @[])
