@@ -1,5 +1,5 @@
 (def title "Vampyre")
-(def debug false)
+(def debug true)
 
 (def height (if debug 110 28))
 (def width  (if debug 110 28))
@@ -351,10 +351,10 @@
   (def mapwidth (- width 1))
   (def mapheight (- height 2))
 
-  (set startx (max 0 (- (player-coord 1) (//  mapwidth 2))))
-  (set starty (max 0 (- (player-coord 0) (// mapheight 2))))
-  (set endx (min  WIDTH (+ (player-coord 1) (//  mapwidth 2))))
-  (set endy (min HEIGHT (+ (player-coord 0) (// mapheight 2)))))
+  (set startx (- (player-coord 1) (//  mapwidth 2)))
+  (set starty (- (player-coord 0) (// mapheight 2)))
+  (set endx (+ (player-coord 1) (//  mapwidth 2)))
+  (set endy (+ (player-coord 0) (// mapheight 2))))
 
 (defn draw []
   (fill 0 0 width height " ")
@@ -364,32 +364,34 @@
   (loop [my :range [starty endy]]
     (var x 0)
     (loop [mx :range [startx endx]]
-      (def tile (at-dungeon [my mx]))
-
-      (color
-        (if (((mobs player) :fov) [my mx])
-          (match (tile :type)
-            (@ :wall) 0x0D
-            (@ :closed-door) 0x0C
-            (@ :open-door) 0x0C
-            (@ :floor) 0x0E)
-          (if (memory [my mx])
-            0x0F
-            (if debug 0x0F 0x00))))
-
-      (var s
-        (match (tile :type)
-          (@ :closed-door) "["
-          (@ :open-door) "|"
-          (@ :wall) "#"
-          (@ :floor) "*"))
-
-      (if (not= (tile :mob) -1)
+      (if (coord-valid? [my mx])
         (do
-          (set s ((mobs (tile :mob)) :tile))
-          (color 0x01)))
+          (def tile (at-dungeon [my mx]))
 
-      (c7put x y s)
+          (color
+            (if (((mobs player) :fov) [my mx])
+              (match (tile :type)
+                (@ :wall) 0x0D
+                (@ :closed-door) 0x0C
+                (@ :open-door) 0x0C
+                (@ :floor) 0x0E)
+              (if (memory [my mx])
+                0x0F
+                (if debug 0x0F 0x00))))
+
+          (var s
+            (match (tile :type)
+              (@ :closed-door) "["
+              (@ :open-door) "|"
+              (@ :wall) "#"
+              (@ :floor) "*"))
+
+          (if (not= (tile :mob) -1)
+            (do
+              (set s ((mobs (tile :mob)) :tile))
+              (color 0x01)))
+
+          (c7put x y s)))
       (++ x))
     (++ y))
  
