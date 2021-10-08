@@ -4,6 +4,7 @@
 (def width  (if debug 110 28))
 (def scale  (if debug   1  3))
 
+(def DEPTH    3)
 (def HEIGHT 100)
 (def WIDTH  100)
 
@@ -71,7 +72,7 @@
                                     (= (tile :type) :open-door))
                                   (= (tile :mob) -1)))
                  })
-(var dungeon (array/new HEIGHT))
+(var dungeon (array/new DEPTH))
 
 (var fuses @[])
 
@@ -107,22 +108,25 @@
             ])
   (+ (diff 0) (diff 1)))
 
-(defn at-dungeon [coord]
-  ((dungeon (coord 0)) (coord 1)))
+(defn at-dungeon [z coord]
+  (((dungeon z) (coord 0)) (coord 1)))
 
 (def mob-proto @{ :id -1
                   :tile "g"
                   :coord [-1 -1]
+                  :z 0
                   :max-hp 10
                   :hp 10
                   :fov-radius 12
                   :fov @{}
-                  :move-mob (fn [mob dir]
+                  :move-mob (fn [mob dir &z]
                               (def src (mob :coord))
+                              (def srcz (mob :z))
                               (def dst (coord-add src dir))
-                              (if dst
+                              (def dstz (+ srcz (or &z 0)))
+                              (if (and dst (>= dstz 0) (< dstz DEPTH))
                                 (do
-                                  (def tile (at-dungeon dst))
+                                  (def tile (at-dungeon dstz dst))
                                   (cond
                                     (= (tile :type) :closed-door)
                                       (do
@@ -131,11 +135,12 @@
                                                                (set (tile :type) :closed-door))
                                                            dst])
                                         true)
-                                    (:walkable? (at-dungeon dst))
+                                    (:walkable? (at-dungeon dstz dst))
                                       (do
-                                        (set ((at-dungeon src) :mob) -1)
-                                        (set ((at-dungeon dst) :mob) (mob :id))
+                                        (set ((at-dungeon srcz src) :mob) -1)
+                                        (set ((at-dungeon dstz dst) :mob) (mob :id))
                                         (set (mob :coord) dst)
+                                        (set (mob :z) dstz)
                                         true)
                                     false))
                                 false))
@@ -168,13 +173,13 @@
     (/= accm arg))
   (math/round accm))
 
-(defn shadowcast [from radius]
+(defn shadowcast [z from radius]
   (def mult [ [  1  0  0 -1 -1  0  0  1 ]
               [  0  1 -1  0  0 -1  1  0 ]
               [  0  1  1  0  0 -1 -1  0 ]
               [  1  0  0  1 -1  0  0 -1 ]
             ])
-  (defn cast-light [buf coord row start_p end radius coordx coordy]
+  (defn cast-light [buf z coord row start_p end radius coordx coordy]
     (if (< start_p end) (break))
     (var start start_p)
     (var new-start 0)
@@ -199,15 +204,15 @@
                 (if (<= (+ (* dx dx) (* dy dy)) (* radius radius))
                   (set (buf cur) true))
                 (if blocked
-                  (if (= ((at-dungeon cur) :type) :wall)
+                  (if (= ((at-dungeon z cur) :type) :wall)
                     (set new-start r-slope)
                     (do (set blocked false)
                         (set start new-start)))
-                  (if (and (= ((at-dungeon cur) :type) :wall)
+                  (if (and (= ((at-dungeon z cur) :type) :wall)
                            (< j radius))
                     (do
                       (set blocked true)
-                      (cast-light buf coord (+ j 1) start l-slope radius coordx coordy)
+                      (cast-light buf z coord (+ j 1) start l-slope radius coordx coordy)
                       (set new-start r-slope)))))))))
       (if blocked (break))
       (+= j stepj)))
@@ -215,7 +220,7 @@
   (var res @{})
   (set (res from) true)
   (loop [octant :range [0 8]]
-    (cast-light res from 1 1 0 radius
+    (cast-light res z from 1 1 0 radius
                 [((mult 0) octant) ((mult 1) octant)]
                 [((mult 2) octant) ((mult 3) octant)]))
   res)
@@ -265,7 +270,7 @@
 
 # If &restrict is truthy, then the algorithm will consider tiles
 # that the player cannot see or remember as blocking
-(defn astar [start goal hfn &restrict]
+(defn astar [z start goal hfn &restrict]
   (def NODE_CLOSED 0)
   (def NODE_OPEN 1)
 
@@ -274,8 +279,8 @@
 
   (defn node-valid? [self restrict]
     (and (or
-           (:walkable? (at-dungeon self))
-           (= ((at-dungeon self) :type) :closed-door))
+           (:walkable? (at-dungeon z self))
+           (= ((at-dungeon z self) :type) :closed-door))
          (or (not restrict)
              (and restrict (or (((mobs player) :fov) self) (memory self))))))
 
@@ -365,6 +370,7 @@
   (set endy (+ (player-coord 0) (// mapheight 2))))
 
 (defn draw []
+  (def z ((mobs player) :z))
   (fill 0 0 width height " ")
   (calc-display-offsets)
 
@@ -374,7 +380,7 @@
     (loop [mx :range [startx endx]]
       (if (coord-valid? [my mx])
         (do
-          (def tile (at-dungeon [my mx]))
+          (def tile (at-dungeon z [my mx]))
 
           (color
             (if (((mobs player) :fov) [my mx])
@@ -412,12 +418,12 @@
       (loop [coord :in user-goto]
         (def dx (- (coord 1) startx))
         (def dy (- (coord 0) starty))
-        (if (= ((at-dungeon coord) :type) :floor)
+        (if (= ((at-dungeon z coord) :type) :floor)
           (c7put dx dy "&")))
       (set user-goto nil))))
 
-(defn mapgen []
-  (defn fill-random-circles [num max-radius tiletype]
+(defn mapgen [z]
+  (defn fill-random-circles [z num max-radius tiletype]
     (loop [_ :range [0 num]]
       (def rx (math/round (% (* (math/random) 1000) WIDTH)))
       (def ry (math/round (% (* (math/random) 1000) HEIGHT)))
@@ -426,9 +432,9 @@
       (loop [r :range [1 max-radius]]
         (def circle (bresenham-circle [ry rx] r))
         (loop [coord :in circle]
-          (set ((at-dungeon coord) :type) tiletype)))))
+          (set ((at-dungeon z coord) :type) tiletype)))))
 
-  (defn dig-maze [coord]
+  (defn dig-maze [z coord]
     (def neighbors @[ [[ -1  0 ] [ -2  0 ]]
                       [[  1  0 ] [  2  0 ]]
                       [[  0  1 ] [  0  2 ]]
@@ -439,22 +445,22 @@
       (def icoord (coord-add coord (neighbor 0)))
       (def ncoord (coord-add coord (neighbor 1)))
       (if (and icoord ncoord
-               (not= ((at-dungeon ncoord) :type) :floor))
+               (not= ((at-dungeon z ncoord) :type) :floor))
         (do
-          (set ((at-dungeon icoord) :type) :floor)
-          (set ((at-dungeon ncoord) :type) :floor)
+          (set ((at-dungeon z icoord) :type) :floor)
+          (set ((at-dungeon z ncoord) :type) :floor)
           (dig-maze ncoord)))))
 
   # Disabled for now.
-  #(dig-maze [0 0])
-  #(fill-random-circles 50 9 :wall)
+  #(dig-maze z [0 0])
+  #(fill-random-circles z 50 9 :wall)
 
   (var cur [(/ WIDTH 2) (/ HEIGHT 2)])
   (var run 1)
   (var last-dir D_N)
 
-  (loop [_ :range [0 10000]]
-    (set ((at-dungeon cur) :type) :floor)
+  (loop [_ :range [0 6000]]
+    (set ((at-dungeon z cur) :type) :floor)
     (-- run)
     (if (<= run 0)
       (do
@@ -470,7 +476,7 @@
         (set last-dir new-dir))
       (set cur (or (coord-add cur last-dir) cur))))
 
-  (fill-random-circles 10 10 :floor)
+  (fill-random-circles z 10 10 :floor)
  
   # Postprocessing
   #    - Fill in edges
@@ -478,15 +484,15 @@
   (loop [y :range [0 HEIGHT]]
     (loop [x :range [0 WIDTH]]
       (if (or (= x 0) (= y 0) (= x (- WIDTH 1)) (= y (- HEIGHT 1)))
-        (set ((at-dungeon [y x]) :type) :wall))
+        (set ((at-dungeon z [y x]) :type) :wall))
 
-      (if (= ((at-dungeon [y x]) :type) :floor)
+      (if (= ((at-dungeon z [y x]) :type) :floor)
         (do
           (var pattern @[])
           (loop [direction :in directions]
             (def new (coord-add [y x] direction))
             (if new
-              (array/push pattern (match ((at-dungeon new) :type)
+              (array/push pattern (match ((at-dungeon z new) :type)
                                     (@ :floor) "."
                                     _           "#"))
               (array/push pattern "#")))
@@ -507,11 +513,13 @@
                   (= pattern ["." "." "#" "#" "#" "." "." "#"])
                   (= pattern ["#" "." "." "#" "#" "#" "." "."]))
             (if (< 0.75 (math/random))
-              (set ((at-dungeon [y x]) :type) :closed-door))))))))
+              (set ((at-dungeon z [y x]) :type) :closed-door))))))))
 
 (defn tick []
+  (def playerz ((mobs player) :z))
   (loop [mob :in mobs]
-    (set (mob :fov) (shadowcast (mob :coord) (mob :fov-radius))))
+    (if (= (mob :z) playerz)
+      (set (mob :fov) (shadowcast playerz (mob :coord) (mob :fov-radius)))))
   (loop [coord :keys ((mobs player) :fov)]
     (set (memory coord) true))
 
@@ -531,21 +539,25 @@
 (defn init []
   (load-sprites sprites)
 
-  (loop [y :range [0 HEIGHT]]
-    (put dungeon y (array/new WIDTH))
-    (loop [x :range [0 WIDTH]]
-      (put (get dungeon y) x (table/setproto @{} tile-proto))))
+  (loop [z :range [0 DEPTH]]
+    (put dungeon z (array/new HEIGHT))
+    (loop [y :range [0 HEIGHT]]
+      (put (dungeon z) y (array/new WIDTH))
+      (loop [x :range [0 WIDTH]]
+        (put (get (dungeon z) y) x (table/setproto @{} tile-proto)))))
 
   (set player (length mobs))
   (def player-coord [(/ WIDTH 2) (/ HEIGHT 2)])
   (def player-obj @{ :id player
                      :tile "@"
                      :coord player-coord
+                     :z 0
                      })
   (array/push mobs (table/setproto player-obj mob-proto))
-  (set ((at-dungeon player-coord) :mob) player)
+  (set ((at-dungeon 0 player-coord) :mob) player)
 
-  (mapgen)
+  (loop [z :range [0 DEPTH]]
+    (mapgen z))
 
   (tick)
   (draw))
@@ -554,14 +566,16 @@
 
 (defn keydown [k]
   (cond
-    (or (= k "h") (= k "left"))  (:move-mob (mobs player) D_W)
-    (or (= k "j") (= k "down"))  (:move-mob (mobs player) D_S)
-    (or (= k "k") (= k "up"))    (:move-mob (mobs player) D_N)
-    (or (= k "l") (= k "right")) (:move-mob (mobs player) D_E)
-        (= k "y")                (:move-mob (mobs player) D_NW)
-        (= k "u")                (:move-mob (mobs player) D_NE)
-        (= k "b")                (:move-mob (mobs player) D_SW)
-        (= k "n")                (:move-mob (mobs player) D_SE))
+    (or  (= k  "h") (= k "left"))  (:move-mob (mobs player) D_W    0)
+    (or  (= k  "j") (= k "down"))  (:move-mob (mobs player) D_S    0)
+    (or  (= k  "k") (= k "up"))    (:move-mob (mobs player) D_N    0)
+    (or  (= k  "l") (= k "right")) (:move-mob (mobs player) D_E    0)
+         (= k  "y")                (:move-mob (mobs player) D_NW   0)
+         (= k  "u")                (:move-mob (mobs player) D_NE   0)
+         (= k  "b")                (:move-mob (mobs player) D_SW   0)
+         (= k  "n")                (:move-mob (mobs player) D_SE   0)
+    (and (= k "f1") debug)         (:move-mob (mobs player) [0 0] -1)
+    (and (= k "f2") debug)         (:move-mob (mobs player) [0 0]  1))
   (tick)
   (draw))
 
@@ -573,7 +587,7 @@
       (if (or debug
               (((mobs player) :fov) [cell-y cell-x])
               (memory [cell-y cell-x]))
-        (set user-goto (astar ((mobs player) :coord)
+        (set user-goto (astar ((mobs player) :z) ((mobs player) :coord)
                               [cell-y cell-x] manhattan-distance
                               (not debug))))
       (draw))))
