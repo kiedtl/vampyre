@@ -106,12 +106,13 @@
 (defn eq-coord [a b]
   (and (= (a :x) (b :x)) (= (a :y) (b :y)) (= (a :z) (b :z))))
 
+(defn coord-valid? [c]
+  (and (>= (c 0) 1) (>= (c 1) 1)
+       (< (c 1) (- WIDTH 1)) (< (c 0) (- HEIGHT 1))))
+
 (defn coord-add-xy2 [a b]
   (def r [(+ (a 0) (b 0)) (+ (a 1) (b 1))])
-  (if (or (< (r 0) 0) (< (r 1) 0)
-          (>= (r 1) (- WIDTH 1)) (>= (r 0) (- HEIGHT 1)))
-    nil
-    r))
+  (if (not (coord-valid? r)) nil r))
 
 (defn add-xy [a b]
   (var r @{ :x (+ (a :x) (b :x)) :y (+ (a :y) (b :y)) })
@@ -192,8 +193,7 @@
 
 (defn bresenham-circle [center radius]
   (defn add-coord [buf x y]
-    (if (and (>= x 0) (>= y 0) (< x WIDTH) (< y HEIGHT))
-      (array/push buf [y x])))
+    (if (coord-valid? [y x]) (array/push buf [y x])))
 
   (var res @[])
 
