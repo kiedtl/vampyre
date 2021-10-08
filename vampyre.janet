@@ -1,5 +1,4 @@
 (def title "Vampyre")
-(def debug true)
 
 (def height (if debug 110 28))
 (def width  (if debug 110 28))
