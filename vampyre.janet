@@ -173,6 +173,15 @@
           (poke (+ offset i) pixel)
           (++ i))))
 
+(defn shuffle [arr]
+  (defn swap [arr i1 i2]
+    (def tmp (arr i1))
+    (set (arr i1) (arr i2))
+    (set (arr i2) tmp))
+  (loop [ctr :range [0 (length arr)]]
+    (def i (math/floor (% (* (math/random) 100000) (length arr))))
+    (swap arr i ctr)))
+
 (defn // [arg1 & args]
   (var accm arg1)
   (each arg args
@@ -373,11 +382,42 @@
       (set user-goto nil))))
 
 (defn mapgen []
+  (defn fill-random-circles [num max-radius tiletype]
+    (loop [_ :range [0 num]]
+      (def rx (math/round (% (* (math/random) 1000) WIDTH)))
+      (def ry (math/round (% (* (math/random) 1000) HEIGHT)))
+      (def radius (+ 2 (math/round (% (* (math/random) 1000) max-radius))))
+
+      (loop [r :range [1 max-radius]]
+        (def circle (bresenham-circle (new-coord rx ry 0) r))
+        (loop [coord :in circle]
+          (set ((at-dungeon2 coord) :type) tiletype)))))
+
+  (defn dig-maze [coord]
+    (def neighbors @[ [[ -1  0 ] [ -2  0 ]]
+                      [[  1  0 ] [  2  0 ]]
+                      [[  0  1 ] [  0  2 ]]
+                      [[  0 -1 ] [  0 -2 ]]
+                    ])
+    (shuffle neighbors)
+    (loop [neighbor :in neighbors]
+      (def icoord (coord-add-xy2 coord (neighbor 0)))
+      (def ncoord (coord-add-xy2 coord (neighbor 1)))
+      (if (and icoord ncoord
+               (not= ((at-dungeon2 ncoord) :type) T_FLOOR))
+        (do
+          (set ((at-dungeon2 icoord) :type) T_FLOOR)
+          (set ((at-dungeon2 ncoord) :type) T_FLOOR)
+          (dig-maze ncoord)))))
+
+  (dig-maze [0 0])
+  (fill-random-circles 50 9 T_WALL)
+
   (var cur (new-coord (/ WIDTH 2) (/ HEIGHT 2) 0))
   (var run 1)
   (var last-dir D_N)
 
-  (loop [_ :range [0 6000]]
+  (loop [_ :range [0 10000]]
     (set ((at-dungeon cur) :type) T_FLOOR)
     (-- run)
     (if (<= run 0)
@@ -393,16 +433,8 @@
         (set run (math/round (% (* (math/random) 10) 4)))
         (set last-dir new-dir))
       (set cur (or (add-xy cur last-dir) cur))))
-  
-  (loop [_ :range [0 15]]
-    (def rx (math/round (% (* (math/random) 1000) WIDTH)))
-    (def ry (math/round (% (* (math/random) 1000) HEIGHT)))
-    (def max-radius (+ 2 (math/round (% (* (math/random) 1000) 10))))
 
-    (loop [radius :range [1 max-radius]]
-      (def circle (bresenham-circle (new-coord rx ry 0) radius))
-      (loop [coord :in circle]
-        (set ((at-dungeon (new-coord (coord 0) (coord 1) 0)) :type) T_FLOOR))))
+  (fill-random-circles 15 10 T_FLOOR)
   
   (loop [y :range [0 HEIGHT]]
     (loop [x :range [0 WIDTH]]
