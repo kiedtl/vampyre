@@ -1,0 +1,16 @@
+Messages
+--------
+- chilly...                       on game start
+- smells tasty...                 when smelled new mob
+- should check that out...        when moving toward smelled mob
+- ouch!                           when getting hit
+- ow!                             when getting hit
+- uhg                             on death
+- *slurp*                         when drinking blood
+- need blood...                   when thirsty
+- *hiss* *click*                  when locking/cursing door
+- *clink*                         when dropping gold
+
+UI
+--
+- Custom font
