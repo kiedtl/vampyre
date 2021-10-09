@@ -268,6 +268,47 @@
 
   res)
 
+(defn bresenham-line [from to]
+  (var res @[])
+
+  (def x-start (from 1))
+  (def x-end (to 1))
+  (def y-start (from 0))
+  (def y-end (to 0))
+  (def x-step (if (< x-start x-end) 1 -1))
+  (def y-step (if (< y-start y-end) 1 -1))
+  (def x-delta (math/abs (- x-end x-start)))
+  (def y-delta (math/abs (- y-end y-start)))
+
+  (var err 0)
+  (var x x-start)
+  (var y y-start)
+
+  (if (> x-delta y-delta)
+    (do
+      (set err (/ x-delta 2))
+      (while (not= x x-end)
+        (if (coord-valid? [y x])
+          (array/push res [y x]))
+        (-= err y-delta)
+        (if (< err 0)
+          (do
+            (+= y y-step)
+            (+= err x-delta)))
+        (+= x x-step)))
+    (do
+      (set err (/ y-delta 2))
+      (while (not= y y-end)
+        (if (coord-valid? [y x])
+          (array/push res [y x]))
+        (-= err x-delta)
+        (if (< err 0)
+          (do
+            (+= x x-step)
+            (+= err y-delta)))
+        (+= y y-step))))
+  res)
+
 # If &restrict is truthy, then the algorithm will consider tiles
 # that the player cannot see or remember as blocking
 (defn astar [z start goal hfn &restrict]
